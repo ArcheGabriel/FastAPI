@@ -1,1 +1,4 @@
 /fastapienv/
+*.db
+__pycache__/
+*.pyc

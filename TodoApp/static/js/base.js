@@ -205,7 +205,13 @@
                 } else {
                     // Handle error
                     const errorData = await response.json();
-                    alert(`Error: ${errorData.message}`);
+                    console.log("Error Data:", errorData);
+
+                    if (Array.isArray(errorData.detail)) {
+                        alert(errorData.detail[0].msg);
+                    } else {
+                        alert(errorData.detail || "Registration failed");
+                    }
                 }
             } catch (error) {
                 console.error('Error:', error);

@@ -1,8 +1,10 @@
+import re
 from datetime import timedelta, datetime, timezone
 from typing import Annotated
 
+import phonenumbers
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator, Field
 from sqlalchemy.orm import Session
 from starlette import status
 
@@ -27,12 +29,58 @@ oauth2_bearer = OAuth2PasswordBearer(tokenUrl='auth/token')
 
 class CreateUserRequest(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     first_name: str
     last_name: str
-    password: str
+    password: str = Field(min_length=8, max_length=64, required=True)
     role: str
     phone_number: str
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, value):
+        try:
+            parsed = phonenumbers.parse(value, None)
+
+            if not phonenumbers.is_valid_number(parsed):
+                raise ValueError("Invalid phone number")
+
+            return value
+
+        except Exception:
+            raise ValueError("Invalid phone number")
+
+
+    @field_validator("password")
+    @classmethod
+    def check_password_strength(cls,value):
+        if len(value) < 8:
+            raise ValueError(
+                "Password must be at least 8 characters long"
+            )
+
+        if not re.search(r"[A-Z]", value):
+            raise ValueError(
+                "Password must contain at least one uppercase letter"
+            )
+
+        if not re.search(r"[a-z]", value):
+            raise ValueError(
+                "Password must contain at least one lowercase letter"
+            )
+
+        if not re.search(r"\d", value):
+            raise ValueError(
+                "Password must contain at least one digit"
+            )
+
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?]", value):
+            raise ValueError(
+                "Password must contain at least one special character"
+            )
+
+        return value
+
 
 
 class Token(BaseModel):
@@ -99,19 +147,30 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
-    create_user_model = User(
-        username=create_user_request.username,
-        email=create_user_request.email,
-        first_name=create_user_request.first_name,
-        last_name=create_user_request.last_name,
-        hashed_password=bcrypt_context.hash(create_user_request.password),
-        role=create_user_request.role,
-        is_active=True,
-        phone_number=create_user_request.phone_number
-    )
 
-    db.add(create_user_model)
-    db.commit()
+    existing_email = db.query(User).filter(User.email == create_user_request.email).first()
+    existing_phone_number = db.query(User).filter(User.phone_number == create_user_request.phone_number).first()
+    existing_username = db.query(User).filter(User.username == create_user_request.username).first()
+    if existing_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email already registered')
+    elif existing_username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Username already registered')
+    elif existing_phone_number:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Phone number already registered')
+    else:
+        create_user_model = User(
+            username=create_user_request.username,
+            email=create_user_request.email,
+            first_name=create_user_request.first_name,
+            last_name=create_user_request.last_name,
+            hashed_password=bcrypt_context.hash(create_user_request.password),
+            role="User",
+            is_active=True,
+            phone_number=create_user_request.phone_number
+        )
+
+        db.add(create_user_model)
+        db.commit()
 
 
 @router.post("/token", response_model=Token)
