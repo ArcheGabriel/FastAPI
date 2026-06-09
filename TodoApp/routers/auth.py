@@ -32,7 +32,7 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
-    password: str = Field(min_length=8, max_length=64, required=True)
+    password: str
     role: str
     phone_number: str
 

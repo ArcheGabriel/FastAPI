@@ -43,3 +43,9 @@ async def delete_todo(todo_id: int, user: user_dependency, db: db_dependency):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Todo not found')
     db.delete(todo_model)
     db.commit()
+
+@router.get('/todo/user/{owner_id}', status_code=status.HTTP_200_OK)
+async def get_todo(owner_id: int, db: db_dependency, user: user_dependency):
+    if user is None or user.get('user_role') != 'Admin':
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication failed! User is not an admin')
+    return db.query(Todos).filter(Todos.owner_id == owner_id)
